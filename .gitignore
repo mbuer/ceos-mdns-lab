@@ -1,0 +1,18 @@
+# Containerlab generated runtime directories
+clab-*/
+
+# Packet captures
+*.pcap
+*.pcapng
+
+# Logs
+*.log1~# Containerlab generated runtime directories
+clab-*/
+
+# Packet captures
+*.pcap
+*.pcapng
+
+# Logs
+*.log
+
