@@ -11,27 +11,30 @@ SmartPanel hardware.
 
 - [x] Lab 01 - cEOS and Containerlab fundamentals
 - [x] Lab 02 - Static Layer 3 routing
-- [ ] Lab 03 - OSPF
-- [ ] Lab 04 - Multicast and mDNS fundamentals
+- [x] Lab 03 - OSPF
+- [ ] Lab 04 - Multicast Behavior Across Layer 3
 - [ ] Lab 05 - mDNS across Layer 3 boundaries
 - [ ] Lab 06 - Arista mDNS Gateway
 - [ ] Lab 07 - Physical SmartPanel validation
 
 ## Current Status
 
-The lab currently provides reproducible Layer 3 connectivity between Linux
-endpoints connected through two cEOS routers.
-
 Lab 02 introduced a dedicated router transit network and static routes between
-the endpoint networks. End-to-end connectivity was validated with ICMP,
+the endpoint networks.
+
+Lab 03 replaced those router-to-router static routes with OSPF. The cEOS
+routers now form an OSPF adjacency across the transit network and dynamically
+learn the remote endpoint networks.
+
+End-to-end connectivity has been validated with ICMP, routing-table inspection,
 tcpdump, and Wireshark.
 
 The current routed path is:
 
     client1 -> cEOS1 -> cEOS2 -> client2
 
-The next step is to replace the static routes between cEOS1 and cEOS2 with
-OSPF and verify dynamically learned routes.
+The next step is to examine multicast behavior across Layer 3 boundaries before
+moving into mDNS-specific testing.
 
 ## Environment
 
@@ -55,3 +58,4 @@ Example:
     10.10.10.1  cEOS gateway
     10.10.10.2  endpoint
     10.10.10.3  broadcast
+
