@@ -1,340 +1,63 @@
 # Lab 06 - Arista mDNS Gateway
 
-## Status
+## Result
 
-**In progress**
+**Completed successfully**
 
-This lab introduces the Arista EOS mDNS Gateway and builds directly on the
-behavior observed in Lab 05.
+This lab demonstrates DNS-SD service discovery across two routed Layer 3
+networks using the Arista EOS mDNS Gateway.
 
-Lab 05 proved that normal mDNS traffic does not traverse the routed Layer 3
-boundary between the two endpoint networks.
-
-Lab 06 asks the next question:
-
-> Can the Arista mDNS Gateway extend service discovery between those routed
-> networks without treating mDNS as ordinary routed multicast?
-
-The Arista mDNS Gateway control plane is now operational in this lab.
-
-Actual end-to-end DNS-SD service discovery is the next validation step.
-
----
-
-# 1. Why This Lab Exists
-
-The topology contains two devices on different Layer 3 subnets:
-
-```text
-client1                                      client2
-10.10.10.2/30                              10.10.20.2/30
-     |                                           |
-     |                                           |
-   cEOS1 ----------- 10.10.100.0/30 ---------- cEOS2
-10.10.10.1                                   10.10.20.1
-```
-
-Normal unicast routing works.
-
-Generic multicast routing also works because previous labs configured:
-
-- IGMP
-- PIM Sparse Mode
-- a Rendezvous Point
-- multicast routing
-- OSPF for unicast reachability
-
-However, Lab 05 demonstrated that mDNS still does not cross this boundary.
-
-The reason is important:
-
-> mDNS is deliberately designed around local-link discovery.
-
-The Arista mDNS Gateway exists to extend that discovery domain in a controlled,
-application-aware way.
-
----
-
-# 2. mDNS and DNS-SD Are Not the Same Thing
-
-These two terms are often used together, but they describe different parts of
-the system.
-
-## mDNS
-
-mDNS means:
-
-```text
-Multicast DNS
-```
-
-It provides DNS-like name resolution and query/response behavior on the local
-network without requiring a conventional DNS server.
-
-IPv4 mDNS uses:
-
-```text
-Multicast destination: 224.0.0.251
-UDP port:              5353
-```
-
-A compliant mDNS querier normally sends mDNS queries from UDP source port
-`5353` and listens for responses on the same port.
-
-mDNS therefore answers questions such as:
-
-```text
-Who owns printer.local?
-```
-
-or carries the DNS queries used by DNS-SD.
-
----
-
-## DNS-SD
-
-DNS-SD means:
-
-```text
-DNS-Based Service Discovery
-```
-
-DNS-SD defines how devices describe and discover **services** using normal DNS
-record types.
-
-For example, a device may advertise a web interface as:
+A service advertised by `client2`:
 
 ```text
 Test Web._http._tcp.local
 ```
 
-DNS-SD allows another device to discover:
+was successfully discovered from the `client1` subnet after a full
+Containerlab destroy/redeploy.
 
-1. that the service exists
-2. its instance name
-3. which host provides it
-4. which TCP/UDP port it uses
-5. optional metadata
-
-DNS-SD does not invent a completely new protocol.
-
-It uses standard DNS records such as:
+Final discovery path:
 
 ```text
-PTR
-SRV
-TXT
-A
-AAAA
-```
-
-When DNS-SD is combined with mDNS, this service discovery can happen
-automatically on the local link without a conventional DNS infrastructure.
-
----
-
-# 3. How DNS-SD Service Discovery Works
-
-A useful mental model is:
-
-```text
-"What services exist?"
-        |
-        v
-       PTR
-        |
-        v
-"What instance provides this service?"
-        |
-        v
-       SRV
-        |
-        +----> hostname
-        |
-        +----> port
-
-       TXT
-        |
-        +----> metadata
-
-       A / AAAA
-        |
-        +----> IP address
-```
-
-Consider this service:
-
-```text
-Test Web._http._tcp.local
-```
-
-The records could conceptually look like this.
-
-## PTR
-
-```text
-_http._tcp.local
-    ->
-Test Web._http._tcp.local
-```
-
-This means:
-
-> There is an instance named `Test Web` providing an HTTP service.
-
----
-
-## SRV
-
-```text
-Test Web._http._tcp.local
-    ->
-test-host.local
-port 8080
-```
-
-This tells the client:
-
-> The service is hosted by `test-host.local` on TCP port `8080`.
-
----
-
-## TXT
-
-```text
-Test Web._http._tcp.local
-    ->
-path=/
-```
-
-TXT records carry service-specific metadata.
-
----
-
-## A record
-
-```text
-test-host.local
-    ->
+client2
 10.10.20.2
-```
-
-Now the client has enough information to connect:
-
-```text
-10.10.20.2:8080
-```
-
----
-
-# 4. What `_services._dns-sd._udp.local` Means
-
-Earlier in the lab we generated this query:
-
-```text
-_services._dns-sd._udp.local
-```
-
-This is a special DNS-SD meta-query.
-
-It does **not** mean:
-
-```text
-find a web server
-```
-
-or:
-
-```text
-find a specific SmartPanel
-```
-
-Instead it asks approximately:
-
-> What kinds of DNS-SD services are currently being advertised?
-
-For example, a response might indicate that these service types exist:
-
-```text
-_http._tcp.local
-_ipp._tcp.local
-_raop._tcp.local
-```
-
-This is useful for troubleshooting and service enumeration, but it is not the
-same as browsing for an actual service instance.
-
-That distinction becomes important later in this lab.
-
----
-
-# 5. Why mDNS Normally Stops at Layer 3
-
-mDNS uses the IPv4 multicast address:
-
-```text
-224.0.0.251
-```
-
-This address is intended for link-local mDNS communication.
-
-A normal mDNS packet therefore behaves conceptually like this:
-
-```text
-Host A
    |
-   | 224.0.0.251:5353
+   | local mDNS / DNS-SD
    v
-local subnet
++----------------+
+|     cEOS2      |
+|   mDNS GW      |
++----------------+
+        ||
+        || gateway peering / DSO
+        ||
++----------------+
+|     cEOS1      |
+|   mDNS GW      |
++----------------+
    |
-   X
-   X router boundary
-   X
-```
-
-The router is not expected to behave as if this were an ordinary
-administratively scoped multicast group.
-
-This is exactly what Lab 05 demonstrated.
-
----
-
-# 6. Lab 05 Baseline
-
-The Lab 05 test generated a valid DNS packet and sent it from:
-
-```text
+   | new local mDNS response
+   v
+client1
 10.10.10.2
 ```
 
-to:
+The important result is:
 
-```text
-224.0.0.251:5353
-```
+> The original `224.0.0.251` multicast packet is not routed through the
+> network using PIM. The Arista gateways understand DNS-SD information,
+> exchange gateway state, and generate mDNS responses on the remote local link.
 
-Packet capture on client1 showed:
+---
 
-```text
-IP
-    ttl 255
+# 1. Objective
 
-10.10.10.2.56013 > 224.0.0.251.5353
-
-PTR (QM)?
-_services._dns-sd._udp.local.
-```
-
-The packet was visible on the source-facing side of cEOS1.
-
-It was **not** visible on the cEOS1 transit interface toward cEOS2.
-
-The observed behavior was therefore:
+Lab 05 proved that normal mDNS does not cross the routed boundary:
 
 ```text
 client1
    |
-   | mDNS
+   | 224.0.0.251:5353
    v
 cEOS1
    X
@@ -345,192 +68,191 @@ cEOS2
 client2
 ```
 
-This established the baseline for Lab 06.
+Lab 06 answers:
+
+> Can Arista mDNS Gateway extend DNS-SD discovery between these two routed
+> endpoint networks?
+
+The answer is **yes**.
 
 ---
 
-# 7. Why PIM Does Not Solve mDNS
-
-Lab 04 successfully routed this multicast group:
+# 2. Topology
 
 ```text
-239.1.1.1
+client1
+10.10.10.2/30
+    |
+    | Ethernet1
+    |
+cEOS1
+10.10.10.1/30
+    |
+    | Ethernet2
+    | 10.10.100.1/30
+    |
+    | 10.10.100.0/30
+    |
+    | 10.10.100.2/30
+    | Ethernet2
+    |
+cEOS2
+10.10.20.1/30
+    |
+    | Ethernet1
+    |
+client2
+10.10.20.2/30
 ```
 
-using PIM Sparse Mode.
+OSPF provides unicast reachability between the endpoint networks.
 
-That process looked conceptually like this:
+The PIM configuration from Lab 04 remains present, but PIM is **not**
+responsible for the mDNS discovery demonstrated here.
+
+---
+
+# 3. mDNS and DNS-SD
+
+## mDNS
+
+mDNS means **Multicast DNS**.
+
+IPv4 mDNS normally uses:
 
 ```text
-receiver
-   |
-   | IGMP
-   v
-router
-   |
-   | PIM multicast tree
-   v
-router
-   |
- sender
+Destination: 224.0.0.251
+UDP port:    5353
+Domain:      .local
 ```
 
-PIM does not care whether the multicast payload contains:
+It provides DNS-like queries and responses on a local network without requiring
+a conventional DNS server.
 
-- audio
-- video
-- telemetry
-- arbitrary UDP data
+mDNS is intentionally local-link oriented. This is why normal mDNS stopped at
+the router in Lab 05.
 
-It builds multicast forwarding state using concepts such as:
+---
+
+## DNS-SD
+
+DNS-SD means **DNS-Based Service Discovery**.
+
+It describes services using normal DNS records.
+
+Our test service was:
 
 ```text
-(S,G)
-(*,G)
-RPF
+Test Web._http._tcp.local
+```
+
+The important records were:
+
+```text
+PTR   service instance
+SRV   hostname and port
+TXT   service metadata
+A     IPv4 address
+```
+
+Our service resolved conceptually as:
+
+```text
+_http._tcp.local
+        |
+        | PTR
+        v
+Test Web._http._tcp.local
+        |
+        | SRV
+        v
+client2.local:8080
+        |
+        | A
+        v
+10.10.20.2
+```
+
+with metadata:
+
+```text
+TXT path=/
+```
+
+A useful distinction is:
+
+```text
+mDNS   = local multicast DNS transport
+DNS-SD = service-discovery information carried using DNS records
+```
+
+---
+
+# 4. Why PIM Does Not Solve mDNS
+
+Lab 04 routed ordinary multicast traffic using:
+
+```text
+IGMP
+PIM Sparse Mode
 RP
+RPF
 ```
 
-mDNS Gateway is fundamentally different.
-
-It understands **DNS and DNS-SD semantics**.
-
-Instead of simply routing every `224.0.0.251` packet, it understands concepts
-such as:
-
-```text
-service types
-queries
-responses
-records
-links
-remote gateways
-```
-
-That is why the Arista configuration contains commands such as:
-
-```text
-service
-type
-query
-response
-```
-
-rather than simply:
-
-```text
-route 224.0.0.251
-```
-
----
-
-# 8. PIM vs mDNS Gateway
-
-The conceptual difference is:
-
-## Routed multicast
+PIM builds a multicast forwarding tree:
 
 ```text
 sender
    |
    v
-+--------+
-| router |
-|  PIM   |
-+--------+
-    |
-    | multicast forwarding tree
-    |
-+--------+
-| router |
-|  PIM   |
-+--------+
+router
+   |
+   | multicast forwarding
+   v
+router
    |
    v
 receiver
 ```
 
-The routers forward the multicast stream itself.
+PIM does not need to understand the application inside the UDP payload.
+
+The mDNS Gateway is different.
+
+It understands concepts such as:
+
+```text
+service types
+queries
+responses
+DNS records
+local links
+remote links
+remote gateways
+```
+
+So the architecture is closer to:
+
+```text
+local mDNS
+    |
+    v
+mDNS Gateway
+    ||
+    || gateway communication
+    ||
+mDNS Gateway
+    |
+    v
+new local mDNS response
+```
+
+The gateway is application-aware rather than simply forwarding the original
+multicast packet.
 
 ---
 
-## mDNS Gateway
-
-```text
-client1
-   |
-   | local mDNS
-   | 224.0.0.251:5353
-   v
-+-----------+
-|   cEOS1   |
-| mDNS GW   |
-+-----------+
-      ||
-      || gateway communication
-      ||
-+-----------+
-|   cEOS2   |
-| mDNS GW   |
-+-----------+
-   |
-   | local mDNS
-   v
-client2
-```
-
-The gateways extend discovery knowledge between otherwise separate local mDNS
-domains.
-
-The original mDNS packet is therefore not simply routed hop-by-hop like the
-multicast stream from Lab 04.
-
----
-
-# 9. Arista mDNS Gateway Architecture
-
-Arista describes its mDNS Gateway as extending the normal link-local scope of
-mDNS to additional subnets.
-
-Arista also supports peering mDNS gateways.
-
-This allows directly connected subnets behind different gateways to participate
-in a larger logical mDNS discovery domain.
-
-Our topology uses exactly this model:
-
-```text
-10.10.10.0/30
-     |
-     |
-  cEOS1
- mDNS GW
-     |
-     | routed transit
-     |
-10.10.100.0/30
-     |
-     |
-  cEOS2
- mDNS GW
-     |
-     |
-10.10.20.0/30
-```
-
-The client-facing subnet on each router remains its own Layer 3 network.
-
-The gateways cooperate to extend service discovery between them.
-
----
-
-# 10. What Is DSO?
-
-One of the least obvious parts of the configuration is:
-
-```text
-DSO
-```
+# 5. What Is DSO?
 
 DSO means:
 
@@ -538,22 +260,15 @@ DSO means:
 DNS Stateful Operations
 ```
 
-It is standardized in RFC 8490.
+DSO is standardized in RFC 8490.
 
-Traditional DNS communication is usually transaction-oriented:
+Traditional DNS is easy to imagine as individual transactions:
 
 ```text
-query
-  ->
-response
-  ->
-done
+query -> response -> finished
 ```
 
-DSO introduces the concept of a **persistent stateful DNS session**.
-
-Instead of creating an isolated relationship for every DNS transaction, two
-systems can maintain an ongoing connection:
+DSO provides a framework for a **persistent stateful DNS session**:
 
 ```text
 Gateway A
@@ -563,102 +278,40 @@ Gateway A
 Gateway B
 ```
 
-Either side can send stateful DNS-related operations over that connection.
+In this lab, EOS uses a DSO relationship between the two mDNS gateways.
 
-The session can also maintain:
+The observed gateway connection was:
 
-- timeout state
-- keepalive behavior
-- orderly termination
-- extensions for additional stateful DNS operations
+```text
+cEOS1 10.10.100.1
+        ||
+        || TCP 8853
+        ||
+cEOS2 10.10.100.2
+```
 
-In this lab, Arista uses DSO as part of the communication between the two mDNS
-gateways.
+EOS reported:
+
+```text
+Gateway DSO connections
+Address          Port       Status
+10.10.100.2      8853       connected
+```
+
+Important:
+
+> DSO is not simply the original `224.0.0.251` packet being tunneled through
+> the network.
+
+The final endpoint capture proves that cEOS1 generates a new local mDNS
+response.
+
+This lab did not decode the internal DSO payload, so no stronger claim is made
+about exactly how EOS represents service information inside the DSO session.
 
 ---
 
-# 11. DSO in This Lab
-
-Our gateways use their routed transit addresses:
-
-```text
-cEOS1: 10.10.100.1
-cEOS2: 10.10.100.2
-```
-
-The gateway connection uses:
-
-```text
-TCP port 8853
-```
-
-Conceptually:
-
-```text
-cEOS1
-10.10.100.1
-    ||
-    || TCP / DSO
-    ||
-    || port 8853
-    ||
-10.10.100.2
-cEOS2
-```
-
-This is important:
-
-> DSO traffic is not the original mDNS multicast packet.
-
-The local endpoints still use:
-
-```text
-UDP 5353
-224.0.0.251
-```
-
-The gateway-to-gateway relationship is separate.
-
----
-
-# 12. Lab Topology
-
-```text
-client1
-10.10.10.2/30
-    |
-    |
-Ethernet1
-cEOS1
-10.10.10.1/30
-    |
-Ethernet2
-10.10.100.1/30
-    |
-    |
-10.10.100.0/30
-    |
-    |
-10.10.100.2/30
-Ethernet2
-cEOS2
-10.10.20.1/30
-Ethernet1
-    |
-    |
-client2
-10.10.20.2/30
-```
-
-The routed path is:
-
-```text
-client1 -> cEOS1 -> cEOS2 -> client2
-```
-
----
-
-# 13. Containerlab Configuration
+# 6. Containerlab Topology
 
 ```yaml
 name: mdns-gateway
@@ -700,83 +353,51 @@ topology:
 
 ---
 
-# 14. Why client1 Needs an Explicit mDNS Route
+# 7. Linux mDNS Route
 
 Containerlab gives each Linux endpoint a management interface in addition to
 the lab interface.
 
-Initially:
-
-```bash
-ip route get 224.0.0.251
-```
-
-returned:
+Initially, client1 selected its management interface for `224.0.0.251`:
 
 ```text
-multicast 224.0.0.251 dev eth0
-src 172.20.20.11
+multicast 224.0.0.251 dev eth0 src 172.20.20.x
 ```
 
-This would send mDNS through the Containerlab management network.
-
-The lab therefore adds:
+The topology therefore adds:
 
 ```text
-224.0.0.251/32 dev eth1
+ip route add 224.0.0.251/32 dev eth1
 ```
 
-Now:
-
-```bash
-ip route get 224.0.0.251
-```
-
-returns:
+The resulting path becomes:
 
 ```text
-multicast 224.0.0.251 dev eth1
-src 10.10.10.2
+multicast 224.0.0.251 dev eth1 src 10.10.10.2
 ```
 
-This ensures the experiment uses the intended data-plane network.
+This ensures the test uses the intended lab data plane.
 
 ---
 
-# 15. Enabling mDNS on the Router
+# 8. Arista mDNS Gateway Configuration
 
-The global EOS configuration mode is:
+Several separate configuration pieces are required.
 
-```text
-mdns
-```
-
-Initially:
-
-```text
-show mdns status
-```
-
-reported:
-
-```text
-mDNS is disabled
-```
-
-The feature was enabled with:
+## Enable mDNS globally
 
 ```text
 mdns
    no disabled
 ```
 
-Afterward:
+Verification:
 
 ```text
 show mdns status
 ```
 
-reported:
+Expected:
 
 ```text
 mDNS is running
@@ -784,246 +405,141 @@ mDNS is running
 
 ---
 
-# 16. Enabling a Local mDNS Link
+## Enable and identify the local mDNS link
 
-Enabling the global mDNS process is not enough.
-
-Each local interface participating in mDNS also needs:
-
-```text
-mdns ipv4
-```
-
-For example:
+cEOS1:
 
 ```text
 interface Ethernet1
-   no switchport
-   ip address 10.10.10.1/30
-   mdns ipv4
+   mdns ipv4 link client1-link
 ```
 
-Afterward:
+cEOS2:
+
+```text
+interface Ethernet1
+   mdns ipv4 link client2-link
+```
+
+Verification:
 
 ```text
 show mdns links
 ```
 
-shows:
+Example:
 
 ```text
-Interface       Address Family       Status
-Ethernet1       ipv4                 active
+Interface    Address Family    Link ID         Status
+Ethernet1    ipv4              client1-link    active
 ```
 
-This was a key troubleshooting discovery.
-
-Before configuring `mdns ipv4`:
-
-```text
-show mdns links
-```
-
-was empty.
-
-Packet capture showed that mDNS packets physically arrived at Ethernet1, but:
-
-```text
-Received MDNS packets: 0
-```
-
-remained unchanged.
-
-After enabling:
-
-```text
-mdns ipv4
-```
-
-the packet was processed by the EOS mDNS subsystem.
+The Link ID identifies the local mDNS domain to remote gateways.
 
 ---
 
-# 17. Service Rules
+## Configure remote gateways
 
-The Arista gateway uses service rules.
+cEOS1:
 
-Our temporary rule is:
+```text
+remote-gateway ipv4 10.10.100.2
+```
+
+cEOS2:
+
+```text
+remote-gateway ipv4 10.10.100.1
+```
+
+---
+
+## Enable DSO
+
+On both routers:
+
+```text
+dso server ipv4
+```
+
+Verification:
+
+```text
+show mdns status
+```
+
+Expected:
+
+```text
+DSO server is running
+Gateway DSO connections ... connected
+```
+
+---
+
+## Configure service rules
+
+cEOS1:
 
 ```text
 service test
    type any
    query Ethernet1
    response interface Ethernet1
+   response link client2-link
 ```
 
-This can be understood as three separate policy decisions.
+cEOS2:
 
----
+```text
+service test
+   type any
+   query Ethernet1
+   response interface Ethernet1
+   response link client1-link
+```
 
-## `type any`
+Meaning:
 
 ```text
 type any
 ```
 
-means the rule is not restricted to a specific DNS-SD service type.
-
-Later, a production configuration could potentially restrict discovery to
-specific services.
-
-For example:
-
-```text
-_http._tcp
-```
-
-or another required application-specific type.
-
----
-
-## `query Ethernet1`
+allows any DNS-SD service type for this lab.
 
 ```text
 query Ethernet1
 ```
 
-defines a local link from which DNS-SD/mDNS queries are accepted by this rule.
-
-Conceptually:
-
-```text
-client
-   |
-   | query
-   v
-Ethernet1
-   |
-mDNS Gateway
-```
-
----
-
-## `response interface Ethernet1`
+accepts queries from the local endpoint network.
 
 ```text
 response interface Ethernet1
 ```
 
-defines the local interface from which service responses/announcements are
-accepted by the rule.
-
-Conceptually:
+accepts locally learned service responses.
 
 ```text
-service device
-   |
-   | advertisement / response
-   v
-Ethernet1
-   |
-mDNS Gateway
+response link clientX-link
 ```
+
+allows service information associated with the remote named mDNS link to
+participate in the rule.
+
+The Link ID plus `response link` configuration was the critical missing piece
+during troubleshooting.
 
 ---
 
-# 18. Remote Gateway Configuration
+# 9. Final Relevant Router Configuration
 
-cEOS1 identifies cEOS2 as a remote gateway:
-
-```text
-remote-gateway ipv4 10.10.100.2
-```
-
-cEOS2 identifies cEOS1:
-
-```text
-remote-gateway ipv4 10.10.100.1
-```
-
-The relationship is therefore symmetric:
-
-```text
-cEOS1
-10.10.100.1
-    |
-    | remote gateway
-    |
-10.10.100.2
-cEOS2
-```
-
----
-
-# 19. DSO Server
-
-Initially the gateway relationship remained:
-
-```text
-Status: connecting
-```
-
-The reason became visible in:
-
-```text
-show mdns status
-```
-
-which reported:
-
-```text
-DSO server is disabled
-```
-
-The DSO listener was enabled with:
-
-```text
-dso server ipv4
-```
-
-on both routers.
-
-After both sides were enabled, the peer relationship established successfully.
-
----
-
-# 20. Successful Gateway Peering
-
-cEOS1 reported:
-
-```text
-mDNS is running
-Flooding suppression is disabled
-DSO server is running
-
-Gateway DSO connections
-Address          Port       Status
-10.10.100.2      8853       connected
-
-DSO client connections
-Address          Port
-10.10.100.2      49468
-```
-
-This is an important milestone.
-
-It proves:
-
-```text
-cEOS1 <==== persistent DSO relationship ====> cEOS2
-```
-
-The gateway control plane is therefore operational.
-
----
-
-# 21. Full cEOS1 mDNS Configuration
+## cEOS1
 
 ```text
 interface Ethernet1
    no switchport
    ip address 10.10.10.1/30
-   mdns ipv4
+   mdns ipv4 link client1-link
    pim ipv4 sparse-mode
 
 mdns
@@ -1035,18 +551,17 @@ mdns
       type any
       query Ethernet1
       response interface Ethernet1
+      response link client2-link
 ```
 
----
-
-# 22. Full cEOS2 mDNS Configuration
+## cEOS2
 
 ```text
 interface Ethernet1
    no switchport
    ip address 10.10.20.1/30
    ip igmp
-   mdns ipv4
+   mdns ipv4 link client2-link
    pim ipv4 sparse-mode
 
 mdns
@@ -1058,266 +573,246 @@ mdns
       type any
       query Ethernet1
       response interface Ethernet1
+      response link client1-link
 ```
 
----
-
-# 23. Operational Commands
-
-The most useful EOS commands discovered so far are:
-
-```text
-show mdns status
-```
-
-Shows:
-
-- whether mDNS is running
-- whether DSO server is running
-- configured gateway connections
-- connection status
-- inbound DSO clients
-
----
-
-```text
-show mdns links
-```
-
-Shows which local interfaces are participating in mDNS.
-
-Expected:
-
-```text
-Ethernet1    ipv4    active
-```
-
----
-
-```text
-show mdns counters
-```
-
-Shows processing counters including:
-
-```text
-Received MDNS packets
-Sent MDNS packets
-Received DSO packets
-Sent DSO packets
-Discarded MDNS packets
-Ignored One-shot queries
-Packet transmission errors
-```
-
----
-
-```text
-show mdns service rule test
-```
-
-Shows the operational interpretation of the service rule.
-
-Current output:
-
-```text
-Query link: Ethernet1
-Response link:
-Response interface: Ethernet1
-
-Service types:
-   Service Name       Interface/Link       Location    Status
------------------- -------------------- -------------- ------
-```
-
-No actual service has yet populated this table.
-
----
-
-# 24. Current Packet-Test Result
-
-After enabling `mdns ipv4`, sending the synthetic mDNS query caused:
-
-```text
-Received MDNS packets: 1
-```
-
-on cEOS1.
-
-This proves:
-
-```text
-client1
-   |
-   | mDNS
-   v
-cEOS1 Ethernet1
-   |
-   v
-EOS mDNS process
-```
-
-is working.
-
-However:
-
-```text
-Sent DSO packets: 0
-Sent MDNS packets: 0
-```
-
-remained unchanged.
-
-Client2 therefore received nothing.
-
----
-
-# 25. Why This Does Not Yet Mean the Gateway Is Broken
-
-The test packet was:
-
-```text
-_services._dns-sd._udp.local
-```
-
-This is the DNS-SD **service-type enumeration meta-query**.
-
-It asks:
-
-```text
-"What service types exist?"
-```
-
-It does not advertise an actual service.
-
-It also does not prove the complete DNS-SD workflow involving:
-
-```text
-PTR
-SRV
-TXT
-A / AAAA
-```
-
-The next test should therefore use a real service rather than only an
-enumeration query.
-
----
-
-# 26. Next Test: Real Service Advertisement
-
-The next experiment will create a real DNS-SD service on client2.
-
-Example:
-
-```text
-Test Web._http._tcp.local
-```
-
-Conceptually, client2 should advertise:
-
-```text
-PTR
-_http._tcp.local
-    ->
-Test Web._http._tcp.local
-```
-
-plus:
-
-```text
-SRV
-Test Web._http._tcp.local
-    ->
-client2.local:8080
-```
-
-and:
-
-```text
-TXT
-Test Web._http._tcp.local
-    ->
-path=/
-```
-
-and:
-
-```text
-A
-client2.local
-    ->
-10.10.20.2
-```
-
-Then client1 will browse for:
-
-```text
-_http._tcp.local
-```
-
-The expected successful flow is:
-
-```text
-client2
-   |
-   | local service advertisement
-   v
-cEOS2 mDNS Gateway
-   ||
-   || DSO gateway relationship
-   ||
-cEOS1 mDNS Gateway
-   |
-   | local discovery
-   v
-client1
-```
-
----
-
-# 27. Planned Endpoint Tools
-
-The endpoint image will first be checked for:
-
-```text
-avahi-browse
-avahi-publish
-dns-sd
-```
-
-If available, these will provide a realistic DNS-SD implementation.
-
-If not, a small Python-based advertiser and browser can be used.
-
-The important goal is to generate **real DNS-SD service records**, not merely
-arbitrary UDP traffic.
-
----
-
-# 28. Reproducibility
-
-The current router configuration has been saved with:
-
-```text
-copy running-config startup-config
-```
-
-and exported into:
+Full configurations are stored in:
 
 ```text
 config/ceos1.cfg
 config/ceos2.cfg
 ```
 
-The Containerlab topology references these files:
+---
 
-```yaml
-startup-config: config/ceos1.cfg
-startup-config: config/ceos2.cfg
+# 10. Test Service
+
+The endpoint image did not contain:
+
+```text
+avahi-browse
+avahi-publish
+dns-sd
+zeroconf
 ```
 
-A full reproducibility test is still required:
+A small Python standard-library advertiser was therefore used on client2.
+
+The service was:
+
+```text
+Service type:     _http._tcp.local
+Instance:         Test Web._http._tcp.local
+Hostname:         client2.local
+Port:             8080
+IPv4 address:     10.10.20.2
+TXT:              path=/
+```
+
+The advertisement contained:
+
+```text
+PTR
+SRV
+TXT
+A
+```
+
+records and was transmitted every five seconds.
+
+Terminal 1 was used to keep this advertiser running throughout the discovery
+test.
+
+---
+
+# 11. Local Service Learning
+
+With the advertiser running on client2:
+
+```text
+show mdns service type
+```
+
+on cEOS2 showed:
+
+```text
+Ethernet1    ipv4    _http._tcp.
+```
+
+and:
+
+```text
+show mdns service rule test
+```
+
+showed:
+
+```text
+Test Web._http._tcp.local.    Ethernet1
+```
+
+This proved that cEOS2 successfully received and understood the local DNS-SD
+advertisement.
+
+---
+
+# 12. Discovery Test
+
+Three terminals were used.
+
+## Terminal 1 - advertiser
+
+client2 continuously advertised:
+
+```text
+Test Web._http._tcp.local
+```
+
+---
+
+## Terminal 2 - packet capture
+
+client1 waited for an mDNS packet not sourced by itself:
+
+```bash
+docker exec -it clab-mdns-gateway-client1 \
+  tcpdump -ni eth1 -vv -c 1 \
+  'udp port 5353 and not src host 10.10.10.2'
+```
+
+---
+
+## Terminal 3 - browse query
+
+client1 sent:
+
+```text
+PTR _http._tcp.local
+```
+
+to:
+
+```text
+224.0.0.251:5353
+```
+
+from:
+
+```text
+10.10.10.2:5353
+```
+
+---
+
+# 13. Successful Response
+
+tcpdump captured:
+
+```text
+10.10.10.1.5353 > 224.0.0.251.5353
+
+_http._tcp.local.
+PTR Test Web._http._tcp.local.
+
+Test Web._http._tcp.local.
+SRV client2.local.:8080
+
+client2.local.
+A 10.10.20.2
+
+Test Web._http._tcp.local.
+TXT "path=/"
+```
+
+The response also contained an Arista gateway-related record:
+
+```text
+gw._arista._udp.local.
+TXT "type=gw" "location="
+```
+
+The source address is the most important detail:
+
+```text
+10.10.10.1
+```
+
+That is cEOS1.
+
+The original service lives at:
+
+```text
+10.10.20.2
+```
+
+Therefore, cEOS1 is generating a **new local mDNS response** containing service
+information learned through the gateway relationship.
+
+---
+
+# 14. Wireshark Evidence
+
+The successful capture was saved as:
+
+```text
+captures/lab06-mdns-gateway-success.pcap
+```
+
+PCAP files are ignored by Git and are therefore not committed to the
+repository.
+
+The capture was copied to the Windows Utility VM and inspected in Wireshark.
+
+It contained two key packets.
+
+## Packet 1
+
+```text
+10.10.10.2 -> 224.0.0.251
+
+Standard query
+PTR _http._tcp.local
+```
+
+## Packet 2
+
+```text
+10.10.10.1 -> 224.0.0.251
+
+Standard query response
+
+PTR Test Web._http._tcp.local
+TXT
+SRV 0 0 8080 client2.local
+A 10.10.20.2
+```
+
+This is the primary packet-level proof that the mDNS Gateway works.
+
+Useful Wireshark filters:
+
+```text
+mdns
+```
+
+or:
+
+```text
+udp.port == 5353
+```
+
+---
+
+# 15. Reproducibility
+
+The final cEOS configurations were saved and exported into:
+
+```text
+config/ceos1.cfg
+config/ceos2.cfg
+```
+
+The complete lab was then destroyed and redeployed:
 
 ```bash
 sudo containerlab destroy -t topology.clab.yml
@@ -1327,35 +822,52 @@ sudo containerlab deploy \
   --reconfigure
 ```
 
-After redeploy, verify:
+After redeploy, both routers automatically returned to the expected state.
+
+cEOS1:
 
 ```text
-show mdns status
-show mdns links
-show mdns counters
-show mdns service rule test
+mDNS is running
+DSO server is running
+10.10.100.2:8853 connected
+Ethernet1 / client1-link active
+response link client2-link
 ```
 
-The gateway connection should return automatically to:
+cEOS2:
 
 ```text
-connected
+mDNS is running
+DSO server is running
+10.10.100.1:8853 connected
+Ethernet1 / client2-link active
+response link client1-link
 ```
 
-without manual reconfiguration.
+The service advertiser and browse query were then repeated.
+
+The same successful response appeared again:
+
+```text
+10.10.10.1.5353 > 224.0.0.251.5353
+
+PTR Test Web._http._tcp.local
+SRV client2.local:8080
+A 10.10.20.2
+TXT path=/
+```
+
+Therefore the final Lab 06 configuration is reproducible.
 
 ---
 
-# 29. Troubleshooting Timeline
+# 16. Troubleshooting Lessons
 
-This lab exposed several separate requirements.
+The major failures revealed distinct requirements.
 
-Understanding these failures is useful because each one demonstrates a
-different layer of the feature.
+### mDNS configured but not running
 
-## Problem 1 - mDNS globally disabled
-
-Configuration existed, but:
+Symptom:
 
 ```text
 mDNS is disabled
@@ -1370,14 +882,7 @@ mdns
 
 ---
 
-## Problem 2 - DSO peer stuck connecting
-
-Status:
-
-```text
-Gateway DSO connections
-10.10.100.x 8853 connecting
-```
+### Remote gateway remained `connecting`
 
 Cause:
 
@@ -1391,37 +896,15 @@ Fix:
 dso server ipv4
 ```
 
-on both routers.
-
-Result:
-
-```text
-connected
-```
+on both gateways.
 
 ---
 
-## Problem 3 - mDNS packets not counted
-
-tcpdump proved the packet reached Ethernet1, but:
-
-```text
-Received MDNS packets: 0
-```
-
-and:
-
-```text
-show mdns links
-```
-
-was empty.
+### tcpdump saw packets but EOS counters remained zero
 
 Cause:
 
-```text
-Ethernet1 was not configured as an mDNS link.
-```
+Ethernet1 was not enabled as an mDNS link.
 
 Fix:
 
@@ -1430,272 +913,190 @@ interface Ethernet1
    mdns ipv4
 ```
 
-Result:
+---
+
+### Local service worked but remote discovery did not
+
+The gateways were connected, but the remote mDNS links had not been identified
+and referenced by the service policy.
+
+Fix:
 
 ```text
-Ethernet1 ipv4 active
+mdns ipv4 link client1-link
+mdns ipv4 link client2-link
 ```
 
 and:
 
 ```text
-Received MDNS packets: 1
+response link <remote-link-id>
 ```
+
+After this, DSO activity and gateway-generated mDNS responses appeared.
 
 ---
 
-## Problem 4 - Query still not appears on client2
+# 17. Useful EOS Commands
 
-The gateway control plane is established, but the synthetic enumeration query
-has not yet produced a remote client-side packet.
+```text
+show mdns status
+```
 
-This remains under investigation.
+Checks the global process, DSO server and peer state.
 
-The next test will use a real DNS-SD service advertisement.
+```text
+show mdns links
+```
+
+Checks local mDNS interfaces and Link IDs.
+
+```text
+show mdns counters
+```
+
+Shows mDNS and DSO processing counters.
+
+```text
+show mdns service type
+```
+
+Shows learned DNS-SD service types.
+
+```text
+show mdns service rule test
+```
+
+Shows the active service policy and learned service instances.
 
 ---
 
-# 30. Layer-by-Layer Mental Model
+# 18. Final Mental Model
 
-The entire lab can be understood as four separate layers.
-
-## Layer 1 - Endpoint mDNS
+## PIM multicast
 
 ```text
-client
-   |
-   | UDP 5353
-   | 224.0.0.251
-   v
-local link
+source multicast packet
+        |
+        v
+router
+        |
+        | packet forwarded through multicast tree
+        v
+router
+        |
+        v
+receiver
 ```
 
----
-
-## Layer 2 - Local mDNS Gateway Interface
+## Arista mDNS Gateway
 
 ```text
-interface Ethernet1
-   mdns ipv4
-```
-
-This allows EOS to process mDNS received on that local link.
-
----
-
-## Layer 3 - EOS Service Policy
-
-```text
-service test
-   type any
-   query Ethernet1
-   response interface Ethernet1
-```
-
-This determines what discovery information the gateway accepts.
-
----
-
-## Layer 4 - Gateway Peering
-
-```text
-remote-gateway ipv4 <peer>
-dso server ipv4
-```
-
-This creates the relationship between mDNS gateways.
-
-Conceptually:
-
-```text
-Endpoint
-   |
-   | mDNS
-   v
-Local mDNS Link
-   |
-   v
-Service Policy
-   |
-   v
+service device
+      |
+      | local mDNS
+      v
 mDNS Gateway
-   ||
-   || DSO
-   ||
-Remote mDNS Gateway
-   |
-   v
-Remote Local Link
-   |
-   v
-Endpoint
-```
-
----
-
-# 31. Where IGMP and PIM Fit
-
-One important lesson from the previous labs is that these are separate
-mechanisms.
-
-```text
-IGMP
-```
-
-tracks local multicast receiver membership.
-
-```text
-PIM
-```
-
-builds routed multicast distribution trees.
-
-```text
+      ||
+      || gateway state / DSO relationship
+      ||
 mDNS Gateway
+      |
+      | new local mDNS response
+      v
+discovering client
 ```
 
-understands and extends mDNS/DNS-SD discovery.
-
-They should not be mentally combined into one multicast protocol.
-
-A simplified comparison:
-
-| Mechanism | Purpose |
-|---|---|
-| IGMP | Host tells local router which multicast groups it wants |
-| IGMP snooping | L2 switch limits multicast forwarding to interested ports |
-| PIM | Routers build multicast distribution trees |
-| RP | Rendezvous point used by PIM Sparse Mode |
-| mDNS | Local DNS-like multicast discovery |
-| DNS-SD | Describes and discovers services using DNS records |
-| mDNS Gateway | Extends mDNS/DNS-SD between local discovery domains |
-| DSO | Persistent stateful DNS communication mechanism used between systems |
+That distinction is the main lesson of Labs 04–06.
 
 ---
 
-# 32. Current Lab State
+# 19. Standards
 
-At this checkpoint:
+The concepts used in this lab are defined primarily by:
+
+### RFC 6762 - Multicast DNS
+
+Defines mDNS, including:
 
 ```text
-OSPF routing                         WORKING
-Generic routed multicast             WORKING
-PIM                                  WORKING
-RP                                   WORKING
-
-mDNS process                         RUNNING
-Ethernet1 mDNS links                 ACTIVE
-Service rule                         CONFIGURED
-
-DSO server                           RUNNING
-Remote mDNS gateways                 CONNECTED
-
-mDNS packet reception by cEOS1       VERIFIED
-Real DNS-SD service advertisement    NOT YET TESTED
-Cross-subnet service discovery       NOT YET VERIFIED
-Full destroy/redeploy validation     NOT YET COMPLETED
+224.0.0.251
+UDP 5353
+.local
 ```
 
----
+### RFC 6763 - DNS-Based Service Discovery
 
-# 33. Current Conclusion
-
-Lab 06 has successfully established the major control-plane components required
-for Arista mDNS Gateway operation.
-
-The lab has demonstrated that:
-
-1. cEOS 4.36.1F exposes the Arista mDNS Gateway feature.
-2. mDNS must be enabled globally.
-3. Participating local interfaces must explicitly enable `mdns ipv4`.
-4. Gateway policy is built around service types, queries and responses.
-5. Remote mDNS gateways can be configured across a routed network.
-6. DSO must be enabled for the gateway relationship to establish.
-7. The gateways successfully reach `connected` state.
-8. EOS now processes mDNS received on the local endpoint interface.
-9. A simple DNS-SD service-enumeration query has not yet demonstrated
-   cross-subnet discovery.
-10. The next meaningful test is actual DNS-SD service advertisement and
-    discovery.
-
-The final acceptance condition remains:
+Defines DNS-SD and service discovery using records such as:
 
 ```text
-client2 advertises service
-        |
-        v
-cEOS2
-        |
-        | mDNS Gateway / DSO
-        |
-        v
-cEOS1
-        |
-        v
-client1 discovers service
+PTR
+SRV
+TXT
 ```
 
-Until that succeeds after a clean Containerlab redeploy, **Lab 06 remains in
-progress**.
+### RFC 8490 - DNS Stateful Operations
 
----
+Defines the DSO framework for persistent stateful DNS sessions.
 
-# 34. References
-
-## Arista
-
-Arista EOS - Multicast DNS Gateway
-
-Arista describes the mDNS Gateway as extending the link-local scope of mDNS to
-additional subnets and supporting peering between mDNS gateways.
-
-Feature documentation is associated with EOS 4.32.1F.
-
-The exact CLI in this lab was verified directly against:
+The exact EOS configuration syntax used here was verified directly against:
 
 ```text
 cEOS 4.36.1F
 ```
 
-rather than assumed from documentation.
+---
+
+# 20. Final Takeaways
+
+1. mDNS is deliberately local-link oriented.
+2. PIM does not automatically provide cross-subnet mDNS discovery.
+3. DNS-SD describes services using standard DNS records.
+4. Arista mDNS Gateway is application-aware rather than simple multicast
+   forwarding.
+5. Participating interfaces require `mdns ipv4`.
+6. Link IDs identify local mDNS domains to remote gateways.
+7. Service rules determine which local and remote links participate.
+8. DSO gateway peering must be established.
+9. A connected gateway peer alone is not sufficient; the service policy and
+   Link IDs must also be correct.
+10. Wireshark proved that cEOS1 generated a local mDNS response containing the
+    remote service information.
+11. The entire configuration survived a full destroy/redeploy and the final
+    discovery test succeeded again.
 
 ---
 
-## RFC 6762 - Multicast DNS
-
-Defines Multicast DNS, including:
+# Final Result
 
 ```text
-UDP 5353
-224.0.0.251
-.local
-mDNS query and response behavior
+client2
+10.10.20.2
+      |
+      | advertises
+      | Test Web._http._tcp.local
+      v
+    cEOS2
+      ||
+      || mDNS Gateway
+      ||
+    cEOS1
+      |
+      | generates local response
+      v
+client1
+10.10.10.2
 ```
 
----
-
-## RFC 6763 - DNS-Based Service Discovery
-
-Defines DNS-SD, including:
+client1 successfully received enough DNS-SD information to identify:
 
 ```text
-service types
-service instances
-PTR
-SRV
-TXT
-service-type enumeration
+Service:  Test Web._http._tcp.local
+Host:     client2.local
+Address:  10.10.20.2
+Port:     8080
+Metadata: path=/
 ```
 
----
-
-## RFC 8490 - DNS Stateful Operations
-
-Defines:
-
-```text
-DSO = DNS Stateful Operations
-```
-
-and the persistent stateful DNS-session model used for ongoing DNS-related
-communication.
+The Layer 3 mDNS discovery boundary demonstrated in Lab 05 was therefore
+successfully bridged using Arista EOS mDNS Gateway.

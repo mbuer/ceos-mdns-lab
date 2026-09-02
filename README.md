@@ -1,11 +1,15 @@
 # cEOS mDNS Gateway Lab
 
 A Containerlab-based learning and validation environment for testing Layer 3
-routing, multicast DNS (mDNS), and Arista EOS mDNS gateway functionality.
+routing, multicast behavior, multicast DNS (mDNS), and Arista EOS mDNS Gateway
+functionality.
 
-The final goal is to validate mDNS-based service discovery between devices on
-separate /30 networks and ultimately test the implementation with physical
-SmartPanel hardware.
+The project builds progressively from basic cEOS routing to routed multicast,
+then demonstrates why mDNS does not cross Layer 3 boundaries normally and how
+the Arista mDNS Gateway can extend DNS-SD service discovery between routed
+subnets.
+
+The final goal is validation with physical Riedel SmartPanel hardware.
 
 ## Lab Progression
 
@@ -13,34 +17,115 @@ SmartPanel hardware.
 - [x] Lab 02 - Static Layer 3 routing
 - [x] Lab 03 - OSPF
 - [x] Lab 04 - Multicast Behavior Across Layer 3
-- [ ] Lab 05 - mDNS across Layer 3 boundaries
-- [ ] Lab 06 - Arista mDNS Gateway
+- [x] Lab 05 - mDNS across Layer 3 boundaries
+- [x] Lab 06 - Arista mDNS Gateway
 - [ ] Lab 07 - Physical SmartPanel validation
 
-## Current Status
+## What Has Been Proven
 
-The lab now provides reproducible unicast and multicast connectivity between
-Linux endpoints connected through two cEOS routers.
+### Layer 3 Routing
 
-Lab 02 introduced static Layer 3 routing between the endpoint networks.
+Two Linux endpoints on separate `/30` networks communicate through two cEOS
+routers.
 
-Lab 03 replaced the router-to-router static routes with OSPF. The cEOS routers
-form an OSPF adjacency across the transit network and dynamically learn the
-remote endpoint networks.
+The routed path is:
 
-Lab 04 introduced routed IPv4 multicast. Multicast behavior was validated using
-IGMPv3 receiver membership, PIM Sparse Mode, a Rendezvous Point, Reverse Path
-Forwarding, multicast routing-table inspection, and packet capture.
+```text
+client1 -> cEOS1 -> cEOS2 -> client2
+```
 
-End-to-end multicast traffic from client1 to client2 was successfully verified
-after a full Containerlab destroy and redeploy.
+Lab 02 established static routing.
 
-The current routed path is:
+Lab 03 replaced the router-to-router static routes with OSPF and validated
+dynamic route learning and convergence.
 
-    client1 -> cEOS1 -> cEOS2 -> client2
+### Routed Multicast
 
-The next step is to examine mDNS specifically and prove how mDNS discovery
-behaves across Layer 3 boundaries before introducing the Arista mDNS Gateway.
+Lab 04 demonstrated routed IPv4 multicast using:
+
+- IGMPv3
+- PIM Sparse Mode
+- Rendezvous Point
+- Reverse Path Forwarding
+- multicast routing-table inspection
+- tcpdump and Wireshark
+
+Generic multicast traffic was successfully routed between the two endpoint
+networks.
+
+### mDNS Layer 3 Boundary
+
+Lab 05 demonstrated that mDNS behaves differently from ordinary routed
+multicast.
+
+A valid query to:
+
+```text
+224.0.0.251:5353
+```
+
+was visible on the source network but was not forwarded across the first Layer
+3 boundary.
+
+This established the baseline:
+
+```text
+client1
+   |
+   | mDNS
+   v
+cEOS1
+   X
+   X Layer 3 boundary
+   X
+cEOS2
+   |
+client2
+```
+
+### Arista mDNS Gateway
+
+Lab 06 successfully extended DNS-SD service discovery across the routed
+boundary using the Arista EOS mDNS Gateway.
+
+A service advertised by client2:
+
+```text
+Test Web._http._tcp.local
+```
+
+was discovered from the client1 subnet.
+
+The final packet capture showed:
+
+```text
+Query:
+10.10.10.2 -> 224.0.0.251
+PTR _http._tcp.local
+
+Response:
+10.10.10.1 -> 224.0.0.251
+PTR Test Web._http._tcp.local
+SRV client2.local:8080
+TXT path=/
+A 10.10.20.2
+```
+
+The response originates from cEOS1 rather than directly from client2. This
+demonstrates that the gateway is not simply routing the original mDNS multicast
+packet through the network.
+
+The working implementation uses:
+
+- local `mdns ipv4` links
+- named mDNS Link IDs
+- service rules
+- remote gateway relationships
+- DSO gateway peering
+- remote `response link` policy
+
+The complete Lab 06 configuration survived a full Containerlab destroy and
+redeploy, and the end-to-end discovery test succeeded again afterward.
 
 ## Environment
 
@@ -53,15 +138,60 @@ behaves across Layer 3 boundaries before introducing the Arista mDNS Gateway.
 
 ## Addressing Convention
 
-Each test device receives its own /30 network.
+Each test endpoint receives its own `/30` network.
 
 The lower usable address is reserved for the default gateway.
 
 Example:
 
-    10.10.10.0/30
+```text
+10.10.10.0/30
 
-    10.10.10.1  cEOS gateway
-    10.10.10.2  endpoint
-    10.10.10.3  broadcast
+10.10.10.1  cEOS gateway
+10.10.10.2  endpoint
+10.10.10.3  broadcast
+```
 
+The inter-router transit network is also a `/30`.
+
+## Validation Method
+
+Each lab follows the same evidence-based workflow:
+
+```text
+BUILD -> VERIFY -> CAPTURE -> DOCUMENT -> COMMIT -> PUSH
+```
+
+Validation uses:
+
+- EOS operational commands
+- Linux routing inspection
+- ping
+- tcpdump
+- Wireshark
+- full Containerlab destroy/redeploy testing
+
+Generated Containerlab runtime directories and packet captures are intentionally
+excluded from Git.
+
+## Next Step
+
+Lab 07 will move from simulated Linux endpoints to physical Riedel SmartPanel
+hardware.
+
+The target validation is:
+
+```text
+Physical SmartPanel
+        |
+        | mDNS / DNS-SD
+        v
+Arista routed network
+        |
+        | mDNS Gateway
+        v
+remote discovery domain
+```
+
+The goal is to confirm that the behavior proven with the virtual endpoints also
+works with real SmartPanel service discovery.
