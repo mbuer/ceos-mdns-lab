@@ -21,7 +21,8 @@ routed deployments.
 - [x] Lab 04 - Multicast Behavior Across Layer 3
 - [x] Lab 05 - mDNS across Layer 3 boundaries
 - [x] Lab 06 - Arista mDNS Gateway
-- [ ] Lab 07 - Physical SmartPanel validation
+- [ ] Lab 07 - mDNS Gateway scale testing
+- [ ] Lab 08 - Physical SmartPanel validation
 
 ## What Has Been Proven
 
@@ -323,9 +324,22 @@ For systems containing hundreds of routed SmartPanel networks, this could be a
 much cleaner architecture than flattening the network solely for service
 discovery.
 
-## Next Step
+## Next Steps
 
-Lab 07 will move from simulated Linux endpoints to physical Riedel SmartPanel
+Lab 07 scales the proven two-gateway mDNS design before introducing physical
+SmartPanels.
+
+The scale progression is:
+
+```text
+2 + 2   = 4 endpoints
+5 + 5   = 10 endpoints
+10 + 10 = 20 endpoints
+20 + 20 = 40 endpoints
+40 + 40 = 80 endpoints
+```
+
+Lab 08 will move from simulated Linux endpoints to physical Riedel SmartPanel
 hardware.
 
 The target validation is:
