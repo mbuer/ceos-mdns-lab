@@ -5,12 +5,12 @@ topology:
     ceos1:
       kind: arista_ceos
       image: ceos:4.36.1F
-      startup-config: config/02x02/ceos1.cfg
+      startup-config: config/ceos1.cfg
 
     ceos2:
       kind: arista_ceos
       image: ceos:4.36.1F
-      startup-config: config/02x02/ceos2.cfg
+      startup-config: config/ceos2.cfg
 
     client1:
       kind: linux
