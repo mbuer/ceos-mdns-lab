@@ -2,11 +2,7 @@
 
 ## Goal
 
-Scale the proven Lab 06 Arista mDNS Gateway design while keeping the same
-two-gateway architecture.
-
-The purpose of this lab is to determine how configuration and discovery
-behavior scale as more routed `/30` mDNS domains are added.
+Scale the proven Lab 06 Arista mDNS Gateway design while keeping the same two-gateway architecture.
 
 ## Current Status
 
@@ -15,11 +11,10 @@ behavior scale as more routed `/30` mDNS domains are added.
 5 + 5   = 10 endpoints    COMPLETE
 10 + 10 = 20 endpoints    COMPLETE
 20 + 20 = 40 endpoints    COMPLETE
-40 + 40 = 80 endpoints    NEXT
+40 + 40 = 80 endpoints    COMPLETE
 ```
 
-Each checkpoint is self-contained with its own Containerlab topology and cEOS
-configuration.
+Lab 07 is complete.
 
 ```text
 07-mdns-scale-testing/
@@ -27,44 +22,32 @@ configuration.
 ├── 02x02/
 ├── 05x05/
 ├── 10x10/
-└── 20x20/
+├── 20x20/
+└── 40x40/
 ```
 
 ## Key Configuration Finding
 
-EOS list-based mDNS service commands must use `add` when extending an existing
-list. Repeating the same base command replaces the previous value.
-
-Example:
+EOS list-based mDNS service commands must use `add` when extending an existing list. Repeating the same base command replaces the previous value.
 
 ```text
 query Ethernet1
 query add Ethernet2
 ```
 
-This allows one service rule to scale across multiple local interfaces and
-remote Link IDs.
-
-## 2x2 Checkpoint
+## Checkpoint Summary
 
 ```text
-OSPF adjacency                        PASS
-Layer 3 endpoint routing              PASS
-2 local mDNS links per gateway        PASS
-2 remote mDNS links per gateway       PASS
-DSO gateway connection                PASS
-DNS-SD service learning               PASS
-remote discovery                      PASS
-destroy/redeploy reproducibility      PASS
+2x2    PASS
+5x5    PASS
+10x10  PASS
+20x20  PASS
+40x40  PASS
 ```
 
 ## 5x5 Checkpoint
 
 ```text
-OSPF adjacency                        PASS
-Layer 3 endpoint routing              PASS
-5 local mDNS links per gateway        PASS
-5 remote mDNS links per gateway       PASS
 5 DNS-SD services learned             PASS
 client1 discovers all 5 services      PASS
 client9 discovers all 5 services      PASS
@@ -75,58 +58,53 @@ gateway response delay ~2.1 seconds   OBSERVED
 
 ## 10x10 Checkpoint
 
-Ten routed `/30` endpoint networks were configured behind each gateway.
-
-cEOS1 uses Ethernet1 through Ethernet10 for clients 1, 3, 5, 7, 9, 11, 13,
-15, 17, and 19.
-
-cEOS2 uses Ethernet1 through Ethernet10 for clients 2, 4, 6, 8, 10, 12, 14,
-16, 18, and 20.
-
-The routed transit remains:
+The gateway response was split across two mDNS packets:
 
 ```text
-cEOS1 Ethernet48  10.10.100.1/30
-cEOS2 Ethernet48  10.10.100.2/30
+Packet 1: 9 PTR answers, 1278 bytes
+Packet 2: 1 PTR answer, 230 bytes
 ```
 
-At this scale, the gateway response was split across two mDNS packets:
-
-```text
-Packet 1:
-9 PTR answers
-1278 bytes
-
-Packet 2:
-1 PTR answer
-230 bytes
-```
-
-Together, the packets contained the complete PTR, SRV, TXT, and A record set
-for all ten advertised services.
-
-```text
-OSPF adjacency                         PASS
-Layer 3 endpoint routing               PASS
-10 local mDNS links per gateway        PASS
-10 remote mDNS links per gateway       PASS
-10 DNS-SD services learned             PASS
-client1 discovers all 10 services      PASS
-client19 discovers all 10 services     PASS
-complete PTR/SRV/TXT/A response        PASS
-response split across two packets      OBSERVED
-largest response packet 1278 bytes     OBSERVED
-second response packet 230 bytes       OBSERVED
-gateway response delay ~2.1 seconds    OBSERVED
-```
+All ten services were returned with complete PTR/SRV/TXT/A records.
 
 ## 20x20 Checkpoint
 
 Twenty routed `/30` endpoint networks were configured behind each gateway.
 
-cEOS1 uses Ethernet1 through Ethernet20 for clients 1, 3, 5, ... 39.
+All twenty mDNS links became active on both gateways. Twenty `_http._tcp.local` services were advertised behind cEOS2 and learned on Ethernet1 through Ethernet20.
 
-cEOS2 uses Ethernet1 through Ethernet20 for clients 2, 4, 6, ... 40.
+Remote discovery was validated from both client1 and client39.
+
+The gateway response was split across three packets:
+
+```text
+Packet 1: 9 PTR answers, 1286 bytes
+Packet 2: 9 PTR answers, 1286 bytes
+Packet 3: 2 PTR answers, 358 bytes
+```
+
+All twenty services were returned with complete PTR, SRV, TXT, and A records.
+
+A clean redeploy was also used for a cold-start burst test. All twenty advertisers were started together and the gateway moved from 0 to 20 learned services within the next one-second polling interval.
+
+```text
+20 DNS-SD services learned             PASS
+client1 discovers all 20 services      PASS
+client39 discovers all 20 services     PASS
+complete PTR/SRV/TXT/A response        PASS
+20-service cold-start burst            PASS
+gateway response delay ~2.1 seconds    OBSERVED
+```
+
+## 40x40 Checkpoint
+
+Forty routed `/30` endpoint networks were configured behind each gateway for a total of eighty simulated endpoint networks.
+
+cEOS1 uses Ethernet1 through Ethernet40 for clients 1, 3, 5, ... 79.
+
+cEOS2 uses Ethernet1 through Ethernet40 for clients 2, 4, 6, ... 80.
+
+The endpoint addressing extends through `.158`, so the aggregate endpoint routes use `/24`.
 
 The routed transit remains:
 
@@ -137,129 +115,116 @@ cEOS2 Ethernet48  10.10.100.2/30
 
 ### Routing and mDNS Links
 
-OSPF reached `FULL` across Ethernet48.
+OSPF reached `FULL` across Ethernet48 on both gateways.
 
-All twenty mDNS links became active on both gateways.
+All forty mDNS links became active on both gateways.
 
-The service rule correctly included Ethernet1 through Ethernet20 and all twenty
-remote Link IDs.
-
-Routed reachability was verified across edge-to-edge, opposite-edge, and
-middle-to-middle endpoint combinations.
+The service rule correctly included Ethernet1 through Ethernet40 and all forty remote Link IDs.
 
 ### DNS-SD Service Learning
 
-Twenty `_http._tcp.local` services were advertised behind cEOS2.
+Forty `_http._tcp.local` services were advertised behind cEOS2.
 
-cEOS2 learned the service independently on Ethernet1 through Ethernet20 and
-associated each instance with the correct local interface.
+cEOS2 learned the service on Ethernet1 through Ethernet40 and mapped every `Test Web` instance to the expected local interface.
 
 ### Remote Discovery Validation
 
-Remote discovery was tested from both ends of the cEOS1 side.
+A query from client1 at `10.10.10.2:5353` received gateway-generated responses from `10.10.10.1:5353`.
 
-client1 queried from:
+All forty remote services were returned.
 
-```text
-10.10.10.2:5353
-```
-
-and received gateway-generated responses from:
+The response was split across five packets:
 
 ```text
-10.10.10.1:5353
+Packet 1: 9 PTR answers, 1286 bytes
+Packet 2: 9 PTR answers, 1286 bytes
+Packet 3: 9 PTR answers, 1290 bytes
+Packet 4: 9 PTR answers, 1286 bytes
+Packet 5: 4 PTR answers, 626 bytes
 ```
 
-client39 queried from:
+Together, the five packets contained all forty PTR records and the associated SRV, TXT, and A records.
+
+The first response arrived approximately 2.114 seconds after the query.
+
+The capture reported zero packets dropped by the kernel.
+
+### Resource Snapshot
+
+With all forty services active, the Utility VM showed approximately:
 
 ```text
-10.10.10.78:5353
+7.7 GiB RAM total
+4.5 GiB RAM used
+3.2 GiB RAM available
+0 B swap used
 ```
 
-and received gateway-generated responses from:
+Docker reported approximately:
 
 ```text
-10.10.10.77:5353
+cEOS1 memory: 995 MiB
+cEOS2 memory: 1019 MiB
 ```
 
-Both clients discovered all twenty remote services.
-
-At this scale, the gateway response was split across three mDNS packets:
+EOS process snapshots showed approximately:
 
 ```text
-Packet 1:
-9 PTR answers
-1286 bytes
-
-Packet 2:
-9 PTR answers
-1286 bytes
-
-Packet 3:
-2 PTR answers
-358 bytes
+cEOS1 CPU utilization: ~18%
+cEOS2 CPU utilization: ~20%
 ```
 
-Together, the packets contained the complete PTR, SRV, TXT, and A record set
-for all twenty advertised services.
+The `McastDns` process used roughly 47 MiB resident memory on each cEOS node and showed no visible CPU pressure at the sampled moments.
 
-The observed gateway response delay remained approximately 2.1 seconds.
+These are cEOS/VM lab observations and should not be interpreted as hardware platform performance limits.
 
-### 20x20 Result
+### 40x40 Result
 
 ```text
 OSPF adjacency                         PASS
-Layer 3 endpoint routing               PASS
-20 local mDNS links per gateway        PASS
-20 remote mDNS links per gateway       PASS
-20 DNS-SD services learned             PASS
-client1 discovers all 20 services      PASS
-client39 discovers all 20 services     PASS
+40 local mDNS links per gateway        PASS
+40 remote mDNS links per gateway       PASS
+40 DNS-SD services learned             PASS
+client1 discovers all 40 services      PASS
 complete PTR/SRV/TXT/A response        PASS
-response split across three packets    OBSERVED
-largest response packet 1286 bytes     OBSERVED
-third response packet 358 bytes        OBSERVED
-gateway response delay ~2.1 seconds    OBSERVED
+response split across five packets     OBSERVED
+largest response packet 1290 bytes     OBSERVED
+gateway response delay ~2.114 seconds  OBSERVED
+VM swap usage 0 B                      OBSERVED
+mDNS process under no visible pressure OBSERVED
 ```
 
-The 20x20 functional scale test is complete.
+The 40x40 functional and resource scale test is complete.
 
 ## Scaling Observations
-
-The response behavior observed so far is:
 
 ```text
 5 services   -> 1 mDNS response packet
 10 services  -> 2 mDNS response packets
 20 services  -> 3 mDNS response packets
+40 services  -> 5 mDNS response packets
 ```
 
-The gateway is segmenting larger DNS-SD result sets across multiple multicast
-responses while continuing to return the complete service set.
+Across the 5-, 10-, 20-, and 40-service checkpoints, the first gateway response remained close to 2.1 seconds after the query.
 
-Across the tested checkpoints, the first gateway response has remained close
-to 2.1 seconds after the query.
+No functional scaling failure was observed through forty remote services and eighty total routed endpoint domains in this simulated topology.
+
+## Conclusion
+
+Lab 07 demonstrates that the Arista mDNS Gateway mechanism continues to work cleanly as the two-gateway lab scales from two endpoint links per side to forty endpoint links per side.
+
+The result is encouraging for larger routed SmartPanel deployments because the mDNS Gateway can preserve Layer 3 segmentation while returning complete remote DNS-SD service information.
+
+The lab does not establish the supported production limit of a physical Arista platform and does not yet prove compatibility with the actual SmartPanel DNS-SD implementation.
 
 ## Next Step
 
-Build the 40x40 checkpoint:
+Proceed to Lab 08 with physical Riedel SmartPanel hardware.
 
-```text
-40 endpoints behind cEOS1
-40 endpoints behind cEOS2
+The physical validation should determine:
 
-80 total routed mDNS discovery domains
-```
-
-The next test will repeat the same validation pattern while observing:
-
-- OSPF routing
-- active mDNS Link IDs
-- DNS-SD service learning
-- discovery completeness
-- response packet count
-- response size
-- response latency
-- cEOS CPU and memory usage
-- configuration growth
-- clean destroy/redeploy behavior
+- the exact SmartPanel DNS-SD service type
+- the exact PTR/SRV/TXT/A records used by SmartPanel
+- whether SmartPanel WebUI bulk-firmware discovery works across routed `/30`s
+- whether the production mDNS rule can be narrowed from `type any`
+- behavior through the actual target Arista hardware and software version
