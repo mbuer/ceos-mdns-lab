@@ -14,18 +14,20 @@ behavior scale as more routed `/30` mDNS domains are added.
 2 + 2   = 4 endpoints     COMPLETE
 5 + 5   = 10 endpoints    COMPLETE
 10 + 10 = 20 endpoints    COMPLETE
-20 + 20 = 40 endpoints    NEXT
-40 + 40 = 80 endpoints    PLANNED
+20 + 20 = 40 endpoints    COMPLETE
+40 + 40 = 80 endpoints    NEXT
 ```
 
-Each checkpoint is self-contained with its own topology and cEOS configs.
+Each checkpoint is self-contained with its own Containerlab topology and cEOS
+configuration.
 
 ```text
-07-mdns-mdns-scale-testing/
+07-mdns-scale-testing/
 ├── README.md
 ├── 02x02/
 ├── 05x05/
-└── 10x10/
+├── 10x10/
+└── 20x20/
 ```
 
 ## Key Configuration Finding
@@ -58,8 +60,6 @@ destroy/redeploy reproducibility      PASS
 
 ## 5x5 Checkpoint
 
-Five routed `/30` endpoint networks were configured behind each gateway.
-
 ```text
 OSPF adjacency                        PASS
 Layer 3 endpoint routing              PASS
@@ -90,36 +90,69 @@ cEOS1 Ethernet48  10.10.100.1/30
 cEOS2 Ethernet48  10.10.100.2/30
 ```
 
+At this scale, the gateway response was split across two mDNS packets:
+
+```text
+Packet 1:
+9 PTR answers
+1278 bytes
+
+Packet 2:
+1 PTR answer
+230 bytes
+```
+
+Together, the packets contained the complete PTR, SRV, TXT, and A record set
+for all ten advertised services.
+
+```text
+OSPF adjacency                         PASS
+Layer 3 endpoint routing               PASS
+10 local mDNS links per gateway        PASS
+10 remote mDNS links per gateway       PASS
+10 DNS-SD services learned             PASS
+client1 discovers all 10 services      PASS
+client19 discovers all 10 services     PASS
+complete PTR/SRV/TXT/A response        PASS
+response split across two packets      OBSERVED
+largest response packet 1278 bytes     OBSERVED
+second response packet 230 bytes       OBSERVED
+gateway response delay ~2.1 seconds    OBSERVED
+```
+
+## 20x20 Checkpoint
+
+Twenty routed `/30` endpoint networks were configured behind each gateway.
+
+cEOS1 uses Ethernet1 through Ethernet20 for clients 1, 3, 5, ... 39.
+
+cEOS2 uses Ethernet1 through Ethernet20 for clients 2, 4, 6, ... 40.
+
+The routed transit remains:
+
+```text
+cEOS1 Ethernet48  10.10.100.1/30
+cEOS2 Ethernet48  10.10.100.2/30
+```
+
 ### Routing and mDNS Links
 
 OSPF reached `FULL` across Ethernet48.
 
-All ten mDNS links became active on both gateways.
+All twenty mDNS links became active on both gateways.
 
-The service rule correctly included Ethernet1 through Ethernet10 and all ten
+The service rule correctly included Ethernet1 through Ethernet20 and all twenty
 remote Link IDs.
 
-Routed reachability was verified across multiple endpoint combinations.
+Routed reachability was verified across edge-to-edge, opposite-edge, and
+middle-to-middle endpoint combinations.
 
 ### DNS-SD Service Learning
 
-Ten `_http._tcp.local` services were advertised behind cEOS2:
+Twenty `_http._tcp.local` services were advertised behind cEOS2.
 
-```text
-Test Web 2
-Test Web 4
-Test Web 6
-Test Web 8
-Test Web 10
-Test Web 12
-Test Web 14
-Test Web 16
-Test Web 18
-Test Web 20
-```
-
-cEOS2 learned the service independently on Ethernet1 through Ethernet10 and
-associated each instance with the correct interface.
+cEOS2 learned the service independently on Ethernet1 through Ethernet20 and
+associated each instance with the correct local interface.
 
 ### Remote Discovery Validation
 
@@ -137,67 +170,85 @@ and received gateway-generated responses from:
 10.10.10.1:5353
 ```
 
-client19 queried from:
+client39 queried from:
 
 ```text
-10.10.10.38:5353
+10.10.10.78:5353
 ```
 
 and received gateway-generated responses from:
 
 ```text
-10.10.10.37:5353
+10.10.10.77:5353
 ```
 
-Both clients discovered all ten remote services.
+Both clients discovered all twenty remote services.
 
-At this scale, the gateway response was split across two mDNS packets:
+At this scale, the gateway response was split across three mDNS packets:
 
 ```text
 Packet 1:
 9 PTR answers
-1278 bytes
+1286 bytes
 
 Packet 2:
-1 PTR answer
-230 bytes
+9 PTR answers
+1286 bytes
+
+Packet 3:
+2 PTR answers
+358 bytes
 ```
 
-The second packet contained `Test Web 8`.
-
 Together, the packets contained the complete PTR, SRV, TXT, and A record set
-for all ten advertised services.
+for all twenty advertised services.
 
 The observed gateway response delay remained approximately 2.1 seconds.
 
-### 10x10 Result
+### 20x20 Result
 
 ```text
 OSPF adjacency                         PASS
 Layer 3 endpoint routing               PASS
-10 local mDNS links per gateway        PASS
-10 remote mDNS links per gateway       PASS
-10 DNS-SD services learned             PASS
-client1 discovers all 10 services      PASS
-client19 discovers all 10 services     PASS
+20 local mDNS links per gateway        PASS
+20 remote mDNS links per gateway       PASS
+20 DNS-SD services learned             PASS
+client1 discovers all 20 services      PASS
+client39 discovers all 20 services     PASS
 complete PTR/SRV/TXT/A response        PASS
-response split across two packets      OBSERVED
-largest response packet 1278 bytes     OBSERVED
-second response packet 230 bytes       OBSERVED
+response split across three packets    OBSERVED
+largest response packet 1286 bytes     OBSERVED
+third response packet 358 bytes        OBSERVED
 gateway response delay ~2.1 seconds    OBSERVED
 ```
 
-The 10x10 functional scale test is complete.
+The 20x20 functional scale test is complete.
+
+## Scaling Observations
+
+The response behavior observed so far is:
+
+```text
+5 services   -> 1 mDNS response packet
+10 services  -> 2 mDNS response packets
+20 services  -> 3 mDNS response packets
+```
+
+The gateway is segmenting larger DNS-SD result sets across multiple multicast
+responses while continuing to return the complete service set.
+
+Across the tested checkpoints, the first gateway response has remained close
+to 2.1 seconds after the query.
 
 ## Next Step
 
-Build the 20x20 checkpoint:
+Build the 40x40 checkpoint:
 
 ```text
-20 endpoints behind cEOS1
-20 endpoints behind cEOS2
+40 endpoints behind cEOS1
+40 endpoints behind cEOS2
 
-40 total routed mDNS discovery domains
+80 total routed mDNS discovery domains
 ```
 
 The next test will repeat the same validation pattern while observing:
