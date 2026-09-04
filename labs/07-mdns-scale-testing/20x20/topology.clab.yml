@@ -1,0 +1,420 @@
+name: mdns-scale
+
+topology:
+  nodes:
+
+    ceos1:
+      kind: arista_ceos
+      image: ceos:4.36.1F
+      startup-config: config/ceos1.cfg
+
+    ceos2:
+      kind: arista_ceos
+      image: ceos:4.36.1F
+      startup-config: config/ceos2.cfg
+
+    client1:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.2/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.1
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client3:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.6/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.5
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client5:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.10/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.9
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client7:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.14/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.13
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client9:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.18/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.17
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client11:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.22/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.21
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client13:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.26/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.25
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client15:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.30/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.29
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client17:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.34/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.33
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client19:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.38/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.37
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client21:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.42/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.41
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client23:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.46/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.45
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client25:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.50/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.49
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client27:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.54/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.53
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client29:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.58/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.57
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client31:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.62/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.61
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client33:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.66/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.65
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client35:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.70/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.69
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client37:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.74/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.73
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client39:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.10.78/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.20.0/25 via 10.10.10.77
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client2:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.2/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.1
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client4:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.6/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.5
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client6:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.10/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.9
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client8:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.14/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.13
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client10:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.18/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.17
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client12:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.22/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.21
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client14:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.26/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.25
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client16:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.30/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.29
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client18:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.34/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.33
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client20:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.38/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.37
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client22:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.42/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.41
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client24:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.46/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.45
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client26:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.50/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.49
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client28:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.54/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.53
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client30:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.58/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.57
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client32:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.62/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.61
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client34:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.66/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.65
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client36:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.70/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.69
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client38:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.74/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.73
+        - ip route add 224.0.0.251/32 dev eth1
+
+    client40:
+      kind: linux
+      image: lab-endpoint:latest
+      exec:
+        - ip addr add 10.10.20.78/30 dev eth1
+        - ip link set eth1 up
+        - ip route add 10.10.10.0/25 via 10.10.20.77
+        - ip route add 224.0.0.251/32 dev eth1
+
+  links:
+
+    - endpoints: ["client1:eth1", "ceos1:eth1"]
+    - endpoints: ["client3:eth1", "ceos1:eth2"]
+    - endpoints: ["client5:eth1", "ceos1:eth3"]
+    - endpoints: ["client7:eth1", "ceos1:eth4"]
+    - endpoints: ["client9:eth1", "ceos1:eth5"]
+    - endpoints: ["client11:eth1", "ceos1:eth6"]
+    - endpoints: ["client13:eth1", "ceos1:eth7"]
+    - endpoints: ["client15:eth1", "ceos1:eth8"]
+    - endpoints: ["client17:eth1", "ceos1:eth9"]
+    - endpoints: ["client19:eth1", "ceos1:eth10"]
+    - endpoints: ["client21:eth1", "ceos1:eth11"]
+    - endpoints: ["client23:eth1", "ceos1:eth12"]
+    - endpoints: ["client25:eth1", "ceos1:eth13"]
+    - endpoints: ["client27:eth1", "ceos1:eth14"]
+    - endpoints: ["client29:eth1", "ceos1:eth15"]
+    - endpoints: ["client31:eth1", "ceos1:eth16"]
+    - endpoints: ["client33:eth1", "ceos1:eth17"]
+    - endpoints: ["client35:eth1", "ceos1:eth18"]
+    - endpoints: ["client37:eth1", "ceos1:eth19"]
+    - endpoints: ["client39:eth1", "ceos1:eth20"]
+
+    - endpoints: ["ceos1:eth48", "ceos2:eth48"]
+
+    - endpoints: ["client2:eth1", "ceos2:eth1"]
+    - endpoints: ["client4:eth1", "ceos2:eth2"]
+    - endpoints: ["client6:eth1", "ceos2:eth3"]
+    - endpoints: ["client8:eth1", "ceos2:eth4"]
+    - endpoints: ["client10:eth1", "ceos2:eth5"]
+    - endpoints: ["client12:eth1", "ceos2:eth6"]
+    - endpoints: ["client14:eth1", "ceos2:eth7"]
+    - endpoints: ["client16:eth1", "ceos2:eth8"]
+    - endpoints: ["client18:eth1", "ceos2:eth9"]
+    - endpoints: ["client20:eth1", "ceos2:eth10"]
+    - endpoints: ["client22:eth1", "ceos2:eth11"]
+    - endpoints: ["client24:eth1", "ceos2:eth12"]
+    - endpoints: ["client26:eth1", "ceos2:eth13"]
+    - endpoints: ["client28:eth1", "ceos2:eth14"]
+    - endpoints: ["client30:eth1", "ceos2:eth15"]
+    - endpoints: ["client32:eth1", "ceos2:eth16"]
+    - endpoints: ["client34:eth1", "ceos2:eth17"]
+    - endpoints: ["client36:eth1", "ceos2:eth18"]
+    - endpoints: ["client38:eth1", "ceos2:eth19"]
+    - endpoints: ["client40:eth1", "ceos2:eth20"]
